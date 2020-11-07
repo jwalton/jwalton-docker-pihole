@@ -1,0 +1,59 @@
+version: "3.5"
+
+services:
+  # https://github.com/crazy-max/docker-cloudflared/blob/master/examples/compose/docker-compose.yml
+  cloudflared:
+    image: crazymax/cloudflared:latest
+    container_name: cloudflared
+    network_mode: host
+    ports:
+      - target: 5053
+        published: 5053
+        protocol: udp
+      - target: 49312
+        published: 49312
+        protocol: tcp
+    environment:
+      - "TZ=${TZ}"
+      - "TUNNEL_DNS_UPSTREAM=${TUNNEL_DNS_UPSTREAM}"
+    restart: unless-stopped
+    # Need this if you're using Canadian Shield, because they don't list their IP
+    # as altnames in their SSL cert.  :(
+    volumes:
+      - './hosts:/etc/hosts'
+  # More info at https://github.com/pi-hole/docker-pi-hole/ and https://docs.pi-hole.net/
+  pihole:
+    container_name: pihole
+    image: pihole/pihole:latest
+    network_mode: host
+    ports:
+      # DNS
+      - "53:53/tcp"
+      - "53:53/udp"
+      # DHCP
+      # - "67:67/udp"
+      # Web Admin
+      - "${WEB_PORT}:${WEB_PORT}/tcp"
+      - "443:443/tcp"
+    environment:
+      TZ: 'America/Montreal'
+      # IP of cloudflared
+      DNS1: ${DOCKER_IP}#5053
+      DNS2: "no"
+      CONDITIONAL_FORWARDING: "true"
+      CONDITIONAL_FORWARDING_IP: ${ROUTER_IP}
+      CONDITIONAL_FORWARDING_DOMAIN: ${CONDITIONAL_FORWARDING_DOMAIN}
+      CONDITIONAL_FORWARDING_REVERSE: ${CONDITIONAL_FORWARDING_REVERSE}
+      ServerIP: ${DOCKER_IP}
+      INTERFACE: ${INTERFACE}
+      WEB_PORT: ${WEB_PORT}
+      # WEBPASSWORD: 'set a secure password here or it will be random'
+    # Volumes store your data between container upgrades
+    volumes:
+      - './etc-pihole/:/etc/pihole/'
+      - './etc-dnsmasq.d/:/etc/dnsmasq.d/'
+    # Recommended but not required (DHCP needs NET_ADMIN)
+    #   https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
+    cap_add:
+      - NET_ADMIN
+    restart: unless-stopped
